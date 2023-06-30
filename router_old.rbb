@@ -1,0 +1,129 @@
+# frozen_string_literal: true
+
+class Router
+  def initialize
+    @routes = Hash.new { |hash, key| hash[key] = Hash.new(&hash.default_proc) }
+  end
+
+  def match(method, path, &block)
+    segments = path.split('/')
+    params_keys = segments.select { |seg| seg.start_with?(':') }.map { |seg| seg[1..] }
+    path = segments.map { |seg| seg.start_with?(':') ? ':param' : seg }.join('/')
+
+    @routes[method.to_s.upcase][path] = { block: block, params: params_keys }
+  end
+
+  def call(env)
+    prepare_request_and_response(env)
+    method, path = extract_method_and_path(env)
+
+    debug_output("method = #{method}, path = #{path}")
+
+    handler, route_params = find_route(method, path)
+    debug_output("handler = #{handler}, route_params = #{route_params}")
+
+    if handler
+      populate_params(route_params)
+      prepare_env_variables(env, route_params)
+
+      result = handle_request(env, handler)
+      debug_output("handler result = #{result}")
+
+      finish_response_with_result(env, result)
+    else
+      respond_with_404(path)
+    end
+  end
+
+  def find_route(method, path)
+    path_segments = path.split('/')
+    method_routes = @routes[method]
+
+    method_routes.each do |route, route_handler|
+      route_segments = route.split('/')
+      next unless matching_segments?(route_segments, path_segments)
+
+      if matching_route?(route_segments, path_segments)
+        params = extract_params(route_segments, path_segments)
+        return [route_handler, params]
+      end
+    end
+
+    [nil, {}]
+  end
+
+  def matching_segments?(route_segments, path_segments)
+    route_segments.length == path_segments.length
+  end
+
+  def matching_route?(route_segments, path_segments)
+    route_segments.zip(path_segments).all? do |route_seg, path_seg|
+      route_seg.start_with?(':') || route_seg == path_seg
+    end
+  end
+
+  def extract_params(route_segments, path_segments)
+    params = {}
+    route_segments.zip(path_segments).each do |route_seg, path_seg|
+      params[route_seg[1..]] = path_seg if route_seg.start_with?(':')
+    end
+    params
+  end
+
+  def get(path, &block)
+    match('GET', path, &block)
+  end
+
+  def post(path, &block)
+    match('POST', path, &block)
+  end
+
+  def put(path, &block)
+    match('PUT', path, &block)
+  end
+
+  def delete(path, &block)
+    match('DELETE', path, &block)
+  end
+end
+
+private
+
+def prepare_request_and_response(env)
+  env['rack.request'] = Rack::Request.new(env)
+  env['rack.response'] = Rack::Response.new
+end
+
+def extract_method_and_path(env)
+  [env['REQUEST_METHOD'], env['PATH_INFO']]
+end
+
+def debug_output(message)
+  puts "Debug: #{message}"
+end
+
+def populate_params(route_params)
+  params = RouteParams.new
+  route_params.each { |key, value| params.add(key, value) }
+  params.params
+end
+
+def prepare_env_variables(env, route_params)
+  env['router.params'] = populate_params(route_params)
+  debug_output("env['router.params'] = #{env['router.params']}")
+end
+
+def handle_request(env, handler)
+  handler[:block].call(env)
+end
+
+def finish_response_with_result(env, result)
+  env['rack.response'].write(result[2])
+  body = env['rack.response'].finish[2]
+  debug_output("Response Body = #{body.inspect}")
+  env['rack.response'].finish
+end
+
+def respond_with_404(path)
+  [404, { 'Content-Type' => 'text/html' }, ["Oops! no route for #{path}"]]
+end
