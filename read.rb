@@ -1,12 +1,14 @@
+# frozen_string_literal: true
+
 require 'find'
 
 def read_files_from_folder
   buffer = []
   Find.find(Dir.pwd) do |path|
-    if FileTest.file?(path) && File.extname(path) == '.rb'
-      File.open(path, 'r') do |f|
-        buffer << f.read
-      end
+    next unless FileTest.file?(path) && File.extname(path) == '.rb'
+
+    File.open(path, 'r') do |f|
+      buffer << f.read
     end
   end
   buffer.join("\n\n")
@@ -25,4 +27,4 @@ def main
   write_to_output(buffer, output_file)
 end
 
-main if __FILE__ == $0
+main if __FILE__ == $PROGRAM_NAME

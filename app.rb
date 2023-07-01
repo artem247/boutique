@@ -22,7 +22,7 @@ class App
       define_greet_route(router)
       define_user_posts_route(router)
       define_wildcard_route(router)
-    
+
       router
     end
   end
@@ -57,5 +57,4 @@ class App
       [OK, { 'Content-Type' => CONTENT_TYPE_HTML }, message]
     end
   end
-
 end

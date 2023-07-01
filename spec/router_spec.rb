@@ -33,12 +33,10 @@ RSpec.describe 'Route testing', type: :request do
     # Add more expectations about the response here if needed
   end
 
-
   it 'routes GET /* to a wildcard route' do
     get '/any/path/you/want'
     expect(last_response).to be_ok
     expect(last_response.body).to include('Wildcard path: /any/path/you/want')
     # Add more expectations about the response here if needed
   end
-
 end

@@ -13,7 +13,6 @@ class Router
   def match(http_method, path, &handler)
     segments = path.split('/').reject(&:empty?)
     params_keys = segments.select { |seg| seg.start_with?(':') || seg.start_with?('*') }.map { |seg| seg[1..] }
-    
 
     segments.map! do |seg|
       if seg.start_with?(':')
@@ -25,8 +24,7 @@ class Router
       end
     end
 
-    
-    path = "/" + segments.join('/')
+    path = "/#{segments.join('/')}"
 
     route = Route.new(http_method, path, handler, params_keys)
 
@@ -50,6 +48,4 @@ class Router
 
     [nil, {}]
   end
-
-  
 end

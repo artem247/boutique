@@ -11,7 +11,7 @@ class RequestHandler
     preparer = RequestPreparer.new(env)
     responder = ResponseHandler.new(env)
 
-    env = preparer.prepare
+    preparer.prepare
     method, path = preparer.extract_method_and_path
 
     # Debug output

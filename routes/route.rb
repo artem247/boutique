@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class Route
-  attr_reader :http_method, :path, :handler, :params_keys
+  attr_reader :http_method, :path, :handler, :params_keys, :params
 
   def initialize(http_method, path, handler, params_keys)
     @http_method = http_method
@@ -13,8 +13,8 @@ class Route
   def match?(request_method, request_path)
     return false unless @http_method == request_method
 
-    if @path == "/(.+)"
-      @params = { "" => request_path }
+    if @path == '/(.+)'
+      @params = { '' => request_path }
       return true
     end
 
@@ -24,9 +24,4 @@ class Route
     @params = Hash[@params_keys.zip(match.captures)]
     true
   end
-
-  def params
-    @params
-  end
-
 end

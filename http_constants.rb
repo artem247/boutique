@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module HttpConstants
   OK = 200
   CREATED = 201

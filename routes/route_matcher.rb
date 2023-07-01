@@ -7,7 +7,7 @@ module RouteMatcher
 
   def matching_route?(route_segments, path_segments)
     route_segments.zip(path_segments).all? do |route_seg, path_seg|
-      route_seg == "*" || route_seg.start_with?(':') || route_seg == path_seg
+      route_seg == '*' || route_seg.start_with?(':') || route_seg == path_seg
     end
   end
 
