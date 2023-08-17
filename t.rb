@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require_relative 'http_constants'
+require_relative 'routes/request_preparer'
+require_relative 'routes/response_handler'
 require_relative 'routes/route'
 require_relative 'routes/route_params'
 require_relative 'routes/route_matcher'
@@ -9,6 +12,8 @@ require_relative 'routes/request_handler'
 require_relative 'routes/router'
 
 class App
+  include HttpConstants
+
   def self.router
     @router ||= begin
       router = Router.new
@@ -16,6 +21,7 @@ class App
       define_home_route(router)
       define_greet_route(router)
       define_user_posts_route(router)
+      define_wildcard_route(router)
 
       router
     end
@@ -23,7 +29,7 @@ class App
 
   def self.define_home_route(router)
     router.get('/') do |_env|
-      [200, { 'Content-Type' => 'text/html' }, 'You are at Home!']
+      [OK, { 'Content-Type' => CONTENT_TYPE_HTML }, 'You are at Home!']
     end
   end
 
@@ -31,7 +37,7 @@ class App
     router.get('/greet/:name') do |env|
       name = env['router.params'].get('name')
       message = "Hello, #{name}!"
-      [200, { 'Content-Type' => 'text/html' }, message]
+      [OK, { 'Content-Type' => CONTENT_TYPE_HTML }, message]
     end
   end
 
@@ -40,10 +46,36 @@ class App
       user_id = env['router.params'].get('user_id')
       post_id = env['router.params'].get('post_id')
       message = "You are viewing post #{post_id} of user #{user_id}!"
-      [200, { 'Content-Type' => 'text/html' }, message]
+      [OK, { 'Content-Type' => CONTENT_TYPE_HTML }, message]
+    end
+  end
+
+  def self.define_wildcard_route(router)
+    router.get('/*') do |env|
+      wildcard_path = env['router.params'].get('')
+      message = "Wildcard path: #{wildcard_path}"
+      [OK, { 'Content-Type' => CONTENT_TYPE_HTML }, message]
     end
   end
 end
+
+
+# frozen_string_literal: true
+
+module HttpConstants
+  OK = 200
+  CREATED = 201
+  BAD_REQUEST = 400
+  UNAUTHORIZED = 401
+  FORBIDDEN = 403
+  NOT_FOUND = 404
+
+  CONTENT_TYPE_HTML = 'text/html'
+  CONTENT_TYPE_JSON = 'application/json'
+end
+
+
+# frozen_string_literal: true
 
 require 'find'
 
@@ -74,6 +106,7 @@ end
 
 main if __FILE__ == $PROGRAM_NAME
 
+
 # frozen_string_literal: true
 
 module Debug
@@ -82,23 +115,40 @@ module Debug
   end
 end
 
+
 # frozen_string_literal: true
 
 module HTTPVerbs
   def get(path, &block)
-    match('GET', path, &block)
+    verb(:get, path, &block)
   end
 
   def post(path, &block)
-    match('POST', path, &block)
+    verb(:post, path, &block)
   end
 
   def put(path, &block)
-    match('PUT', path, &block)
+    verb(:put, path, &block)
   end
 
   def delete(path, &block)
-    match('DELETE', path, &block)
+    verb(:delete, path, &block)
+  end
+
+  private
+
+  def verb(type, path, &block)
+    match(type.to_s.upcase, path, &block)
+  end
+end
+
+
+class Middleware
+  def initialize(app)
+    @app = app
+  end
+
+  def call(env)
   end
 end
 
@@ -112,8 +162,11 @@ class RequestHandler
   end
 
   def call(env)
-    prepare_request_and_response(env)
-    method, path = extract_method_and_path(env)
+    preparer = RequestPreparer.new(env)
+    responder = ResponseHandler.new(env)
+
+    preparer.prepare
+    method, path = preparer.extract_method_and_path
 
     # Debug output
     debug_output("Incoming request: method=#{method}, path=#{path}")
@@ -122,53 +175,69 @@ class RequestHandler
     debug_output("handler = #{handler}, route_params = #{route_params}")
 
     if handler
-      populate_params(route_params)
-      prepare_env_variables(env, route_params)
-
-      result = handle_request(env, handler)
+      env = preparer.prepare_env_variables(route_params)
+      result = handler.handler.call(env)
       debug_output("handler result = #{result}")
 
-      finish_response_with_result(env, result)
+      if handler.path.include?('*')
+        # Extract the wildcard value from route_params
+        wildcard_value = route_params['']
+        # Modify the response body to include the wildcard path value
+        result[2] = "Wildcard path: #{wildcard_value}"
+      end
+
+      responder.finish_response_with_result(result)
+
     else
-      respond_with_404(path)
+      responder.respond_with_404(path)
     end
+  end
+end
+
+
+# frozen_string_literal: true
+
+class RequestPreparer
+  def initialize(env)
+    @env = env
+  end
+
+  def prepare
+    @env['rack.request'] = Rack::Request.new(@env)
+    @env['rack.response'] = Rack::Response.new
+    @env
+  end
+
+  def extract_method_and_path
+    [@env['REQUEST_METHOD'], @env['PATH_INFO']]
+  end
+
+  def prepare_env_variables(route_params)
+    @env['router.params'] = populate_params(route_params)
+    @env
   end
 
   private
-
-  def prepare_request_and_response(env)
-    env['rack.request'] = Rack::Request.new(env)
-    env['rack.response'] = Rack::Response.new
-  end
-
-  def extract_method_and_path(env)
-    [env['REQUEST_METHOD'], env['PATH_INFO']]
-  end
-
-  def debug_output(message)
-    puts "Debug: #{message}"
-  end
 
   def populate_params(route_params)
     params = RouteParams.new
     route_params.each { |key, value| params.add(key, value) }
     params
   end
+end
 
-  def prepare_env_variables(env, route_params)
-    env['router.params'] = populate_params(route_params)
-    debug_output("env['router.params'] = #{env['router.params'].params}")
+
+# frozen_string_literal: true
+
+class ResponseHandler
+  def initialize(env)
+    @env = env
   end
 
-  def handle_request(env, route)
-    route.handler.call(env)
-  end
-
-  def finish_response_with_result(env, result)
-    env['rack.response'].write(result[2])
-    body = env['rack.response'].finish[2]
-    debug_output("Response Body = #{body.inspect}")
-    env['rack.response'].finish
+  def finish_response_with_result(result)
+    @env['rack.response'].write(result[2])
+    @env['rack.response'].finish[2]
+    @env['rack.response'].finish
   end
 
   def respond_with_404(path)
@@ -176,10 +245,11 @@ class RequestHandler
   end
 end
 
+
 # frozen_string_literal: true
 
 class Route
-  attr_reader :http_method, :path, :handler, :params_keys
+  attr_reader :http_method, :path, :handler, :params_keys, :params
 
   def initialize(http_method, path, handler, params_keys)
     @http_method = http_method
@@ -187,7 +257,23 @@ class Route
     @handler = handler
     @params_keys = params_keys
   end
+
+  def match?(request_method, request_path)
+    return false unless @http_method == request_method
+
+    if @path == '/(.+)'
+      @params = { '' => request_path }
+      return true
+    end
+
+    match = Regexp.new("^#{@path.gsub('/', '\/')}$").match(request_path)
+    return false unless match
+
+    @params = Hash[@params_keys.zip(match.captures)]
+    true
+  end
 end
+
 
 # frozen_string_literal: true
 
@@ -198,23 +284,27 @@ module RouteMatcher
 
   def matching_route?(route_segments, path_segments)
     route_segments.zip(path_segments).all? do |route_seg, path_seg|
-      route_seg.start_with?(':') || route_seg == path_seg
+      route_seg == '*' || route_seg.start_with?(':') || route_seg == path_seg
     end
   end
 
   def extract_params(_route, route_segments, path_segments)
     params = {}
 
-    route_segments.zip(path_segments).each_with_index do |(route_seg, path_seg), _i|
-      next unless route_seg.start_with?(':')
-
-      param_key = route_seg[1..]
-      params[param_key] = path_seg
+    route_segments.zip(path_segments).each_with_index do |(route_seg, path_seg), i|
+      if route_seg.start_with?(':')
+        param_key = route_seg[1..]
+        params[param_key] = path_seg
+      elsif route_seg == '*'
+        param_key = route.params_keys[i]
+        params[param_key] = path_segments[i..].join('/') if param_key
+      end
     end
 
     params
   end
 end
+
 
 # frozen_string_literal: true
 
@@ -234,6 +324,7 @@ class RouteParams
   end
 end
 
+
 # frozen_string_literal: true
 
 class Router
@@ -247,38 +338,71 @@ class Router
   end
 
   def match(http_method, path, &handler)
-    segments = path.split('/')
-    params_keys = segments.select { |seg| seg.start_with?(':') }.map { |seg| seg[1..] }
-    path = segments.join('/')
+    segments = path.split('/').reject(&:empty?)
+    params_keys = extract_params_keys(segments)
+    path = build_path_regex(segments)
 
     route = Route.new(http_method, path, handler, params_keys)
-
     @routes << route
 
-    # Debug output
     debug_output("Added route: method=#{http_method}, path=#{path}, block=#{handler}, params_keys=#{params_keys}")
   end
 
+  def use(middleware)
+    @middlewares << middleware
+  end
+
   def call(env)
+    request = Rack::Request.new(env)
+    response = Rack::Response.new
+    
+    if @middlewares.nil? || @middlewares.empty?
+    # If there are no middlewares, directly call the final application
+      @request_handler.call(env)
+    else
+    # If there are middlewares, wrap them around the application
+      @middlewares.each do |middleware|
+        response = middleware.call(request, response)
+        return response.finish if response.finished?
+      end
+    # Call the final application
     @request_handler.call(env)
   end
 
-  def find_route(_method, path)
-    path_segments = path.split('/')
+  end
 
+  def find_route(request_method, request_path)
     @routes.each do |route|
-      route_segments = route.path.split('/')
-      next unless matching_segments?(route_segments, path_segments)
-
-      if matching_route?(route_segments, path_segments)
-        params = extract_params(route, route_segments, path_segments)
+      if route.match?(request_method, request_path)
+        params = route.params
         return [route, params]
       end
     end
 
     [nil, {}]
   end
+
+  private
+
+  def extract_params_keys(segments)
+    segments.select { |seg| seg.start_with?(':') || seg.start_with?('*') }.map { |seg| seg[1..] }
+  end
+
+  def build_path_regex(segments)
+    segments.map! do |seg|
+      if seg.start_with?(':')
+        '(\w+)'
+      elsif seg.start_with?('*')
+        '(.+)'
+      else
+        seg
+      end
+    end
+
+    "/#{segments.join('/')}"
+  end
 end
+
 
 # frozen_string_literal: true
 
@@ -314,7 +438,15 @@ RSpec.describe 'Route testing', type: :request do
     expect(last_response.body).to include('You are viewing post 456 of user 123!')
     # Add more expectations about the response here if needed
   end
+
+  it 'routes GET /* to a wildcard route' do
+    get '/any/path/you/want'
+    expect(last_response).to be_ok
+    expect(last_response.body).to include('Wildcard path: /any/path/you/want')
+    # Add more expectations about the response here if needed
+  end
 end
+
 
 # frozen_string_literal: true
 
@@ -333,6 +465,9 @@ end
 # it.
 #
 # See https://rubydoc.info/gems/rspec-core/RSpec/Core/Configuration
+
+require 'rack/test'
+require_relative '../app'
 
 RSpec.configure do |config|
   # rspec-expectations config goes here. You can use an alternate

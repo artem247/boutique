@@ -16,14 +16,32 @@ class Router
     path = build_path_regex(segments)
 
     route = Route.new(http_method, path, handler, params_keys)
-
     @routes << route
 
     debug_output("Added route: method=#{http_method}, path=#{path}, block=#{handler}, params_keys=#{params_keys}")
   end
 
+  def use(middleware)
+    @middlewares << middleware
+  end
+
   def call(env)
+    request = Rack::Request.new(env)
+    response = Rack::Response.new
+    
+    if @middlewares.nil? || @middlewares.empty?
+    # If there are no middlewares, directly call the final application
+      @request_handler.call(env)
+    else
+    # If there are middlewares, wrap them around the application
+      @middlewares.each do |middleware|
+        response = middleware.call(request, response)
+        return response.finish if response.finished?
+      end
+    # Call the final application
     @request_handler.call(env)
+  end
+
   end
 
   def find_route(request_method, request_path)
