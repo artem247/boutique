@@ -1,15 +1,8 @@
 # frozen_string_literal: true
 
 require_relative 'http_constants'
-require_relative 'routes/request_preparer'
-require_relative 'routes/response_handler'
-require_relative 'routes/route'
-require_relative 'routes/route_params'
-require_relative 'routes/route_matcher'
-require_relative 'routes/debug'
-require_relative 'routes/http_verbs'
-require_relative 'routes/request_handler'
-require_relative 'routes/router'
+require_relative 'loader'
+
 
 class App
   include HttpConstants
@@ -28,33 +21,33 @@ class App
   end
 
   def self.define_home_route(router)
-    router.get('/') do |_env|
-      [OK, { 'Content-Type' => CONTENT_TYPE_HTML }, 'You are at Home!']
+    router.get('/') do |request, response|
+      response.finish_response_with_result([OK, { 'content-type' => CONTENT_TYPE_HTML }, 'You are at Home!'])
     end
   end
 
   def self.define_greet_route(router)
-    router.get('/greet/:name') do |env|
-      name = env['router.params'].get('name')
+    router.get('/greet/:name') do |request, response|
+      name = request.params.get('name')
       message = "Hello, #{name}!"
-      [OK, { 'Content-Type' => CONTENT_TYPE_HTML }, message]
+      response.finish_response_with_result([OK, { 'content-type' => CONTENT_TYPE_HTML }, message])
     end
   end
 
   def self.define_user_posts_route(router)
-    router.get('/users/:user_id/posts/:post_id') do |env|
-      user_id = env['router.params'].get('user_id')
-      post_id = env['router.params'].get('post_id')
+    router.get('/users/:user_id/posts/:post_id') do |request, response|
+      user_id = request.params.get('user_id')
+      post_id = request.params.get('post_id')
       message = "You are viewing post #{post_id} of user #{user_id}!"
-      [OK, { 'Content-Type' => CONTENT_TYPE_HTML }, message]
+      response.finish_response_with_result([OK, { 'content-type' => CONTENT_TYPE_HTML }, message])
     end
   end
 
   def self.define_wildcard_route(router)
-    router.get('/*') do |env|
-      wildcard_path = env['router.params'].get('')
+    router.get('/*') do |request, response|
+      wildcard_path = request.params.get('')
       message = "Wildcard path: #{wildcard_path}"
-      [OK, { 'Content-Type' => CONTENT_TYPE_HTML }, message]
+      response.finish_response_with_result([OK, { 'content-type' => CONTENT_TYPE_HTML }, message])
     end
   end
 end

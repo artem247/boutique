@@ -8,34 +8,33 @@ class RequestHandler
   end
 
   def call(env)
-    preparer = RequestPreparer.new(env)
-    responder = ResponseHandler.new(env)
 
-    preparer.prepare
-    method, path = preparer.extract_method_and_path
+    request = Request.new(env)
+    response = Response.new
+
+    # Prepare the environment
+    handler, route_params = @router.find_route(request)
+    request.prepare_env_variables(route_params)
 
     # Debug output
-    debug_output("Incoming request: method=#{method}, path=#{path}")
-
-    handler, route_params = @router.find_route(method, path)
+    debug_output("Incoming request: method=#{request.method}, path=#{request.path}")
     debug_output("handler = #{handler}, route_params = #{route_params}")
 
+
     if handler
-      env = preparer.prepare_env_variables(route_params)
-      result = handler.handler.call(env)
-      debug_output("handler result = #{result}")
-
-      if handler.path.include?('*')
-        # Extract the wildcard value from route_params
-        wildcard_value = route_params['']
-        # Modify the response body to include the wildcard path value
-        result[2] = "Wildcard path: #{wildcard_value}"
+      result = handler.handler.call(request, response)
+      if result.is_a?(Response)
+        response = result
       end
-
-      responder.finish_response_with_result(result)
-
+  
+      if handler.path.include?('*')
+        wildcard_value = request.params.get('')
+        response.write("Wildcard path: #{wildcard_value}")
+      end
     else
-      responder.respond_with_404(path)
+      response = Response.new(status: 404, body: ["No route matches #{request.path}"])
     end
+  
+    response.finish
   end
 end

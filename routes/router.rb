@@ -7,6 +7,7 @@ class Router
 
   def initialize
     @routes = []
+    @middlewares = []
     @request_handler = RequestHandler.new(self)
   end
 
@@ -26,25 +27,31 @@ class Router
   end
 
   def call(env)
-    request = Rack::Request.new(env)
-    response = Rack::Response.new
+    request = Request.new(env)
+    response = Response.new
     
     if @middlewares.nil? || @middlewares.empty?
     # If there are no middlewares, directly call the final application
       @request_handler.call(env)
     else
     # If there are middlewares, wrap them around the application
+
       @middlewares.each do |middleware|
         response = middleware.call(request, response)
         return response.finish if response.finished?
       end
+      
+
     # Call the final application
-    @request_handler.call(env)
+    @request_handler.call(request, response)
   end
 
   end
 
-  def find_route(request_method, request_path)
+  def find_route(request)
+    request_method = request.method
+    request_path = request.path
+
     @routes.each do |route|
       if route.match?(request_method, request_path)
         params = route.params
