@@ -1,10 +1,11 @@
 # frozen_string_literal: true
+
 require 'json'
 require 'benchmark'
 
 class Response
   attr_accessor :status, :body
-  attr_reader  :headers
+  attr_reader :headers
 
   def initialize(status: 200, headers: {}, body: [])
     @status = status
@@ -13,26 +14,21 @@ class Response
   end
 
   def finish
-
     response_time = Benchmark.realtime do
-      unless @body.is_a?(Array) && @body.all? { |element| element.is_a?(String) }
-      @body = [@body]
-      end
+      @body = [@body] unless @body.is_a?(Array) && @body.all? { |element| element.is_a?(String) }
 
       content_length = calculate_content_length
       set_header('content-length', content_length.to_s)
     end
 
-    
-
     # Calculate and set Content-Length
     content_length = calculate_content_length
 
     log_performance_metrics(response_time, content_length)
-    
+
     puts "Debug: Response Body Type = #{body.class}"
     puts "Debug: Response Body Value = #{body.inspect}"
-    
+
     [@status, @headers, @body]
   end
 
@@ -65,29 +61,27 @@ class Response
 
   def json(data, status: 200)
     self.status = status
-    set_headers({'content-type' => 'application/json'})
+    set_headers({ 'content-type' => 'application/json' })
     self.body = data.to_json
   end
 
   def html(content, status: 200)
     self.status = status
-    set_headers({'content-type' => 'text/html'})
+    set_headers({ 'content-type' => 'text/html' })
     self.body = content
   end
 
   def write(data)
     puts "Debug: @body Type Before Write = #{@body.class}"
     puts "Debug: @body Value Before Write = #{@body.inspect}"
-      # If @body is an array, join its elements; otherwise, use @body as is.
-      body_str = @body.is_a?(Array) ? @body.join : @body
-    
-      # Append new data to the body string.
-      @body = body_str + data.to_s
+    # If @body is an array, join its elements; otherwise, use @body as is.
+    body_str = @body.is_a?(Array) ? @body.join : @body
+
+    # Append new data to the body string.
+    @body = body_str + data.to_s
     puts "Debug: @body Type After Write = #{@body.class}"
     puts "Debug: @body Value After Write = #{@body.inspect}"
-
   end
-
 
   private
 
@@ -102,6 +96,4 @@ class Response
   def log_performance_metrics(response_time, content_length)
     puts "Performance Metrics: Response Time = #{response_time.round(4)} seconds, Content Length = #{content_length} bytes"
   end
-
-
 end

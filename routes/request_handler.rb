@@ -8,7 +8,6 @@ class RequestHandler
   end
 
   def call(env)
-
     request = Request.new(env)
     response = Response.new
 
@@ -20,13 +19,10 @@ class RequestHandler
     debug_output("Incoming request: method=#{request.method}, path=#{request.path}")
     debug_output("handler = #{handler}, route_params = #{route_params}")
 
-
     if handler
       result = handler.handler.call(request, response)
-      if result.is_a?(Response)
-        response = result
-      end
-  
+      response = result if result.is_a?(Response)
+
       if handler.path.include?('*')
         wildcard_value = request.params.get('')
         response.write("Wildcard path: #{wildcard_value}")
@@ -34,7 +30,7 @@ class RequestHandler
     else
       response = Response.new(status: 404, body: ["No route matches #{request.path}"])
     end
-  
+
     response.finish
   end
 end

@@ -3,7 +3,6 @@
 require_relative 'http_constants'
 require_relative 'loader'
 
-
 class App
   include HttpConstants
 
@@ -21,7 +20,7 @@ class App
   end
 
   def self.define_home_route(router)
-    router.get('/') do |request, response|
+    router.get('/') do |_request, response|
       response.finish_response_with_result([OK, { 'content-type' => CONTENT_TYPE_HTML }, 'You are at Home!'])
     end
   end

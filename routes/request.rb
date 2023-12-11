@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Request
   attr_reader :env, :method, :path, :params
 
@@ -14,15 +16,13 @@ class Request
 
   def headers
     @env.select { |k, _v| k.start_with?('HTTP_') }
-      .map { |key, value| [format_header_key(key), value] }
-      .to_h
+        .transform_keys { |key| format_header_key(key) }
   end
 
   def body_json
     @body_json ||= parse_json_body
   end
-  
-  
+
   def prepare_env_variables(route_params)
     @env['router.params'] = populate_params(route_params)
   end
@@ -35,12 +35,12 @@ class Request
 
   def parse_json_body
     body = @env['rack.input'].read
-    @env['rack.input'].rewind  # Reset the body stream for potential future reads
+    @env['rack.input'].rewind # Reset the body stream for potential future reads
     JSON.parse(body) if json_request?
   rescue JSON::ParserError
     nil
   end
-  
+
   def json_request?
     headers['content-type'] == 'application/json'
   end
@@ -54,5 +54,4 @@ class Request
     route_params.each { |key, value| params.add(key, value) }
     @params = params
   end
-
 end

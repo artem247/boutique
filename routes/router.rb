@@ -29,23 +29,21 @@ class Router
   def call(env)
     request = Request.new(env)
     response = Response.new
-    
+
     if @middlewares.nil? || @middlewares.empty?
-    # If there are no middlewares, directly call the final application
+      # If there are no middlewares, directly call the final application
       @request_handler.call(env)
     else
-    # If there are middlewares, wrap them around the application
+      # If there are middlewares, wrap them around the application
 
       @middlewares.each do |middleware|
         response = middleware.call(request, response)
         return response.finish if response.finished?
       end
-      
 
-    # Call the final application
-    @request_handler.call(request, response)
-  end
-
+      # Call the final application
+      @request_handler.call(request, response)
+    end
   end
 
   def find_route(request)
